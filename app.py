@@ -92,3 +92,4 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
 # v2.0.0-bad FAIL_RATE=33
 # retry Wed Mar 25 02:29:52 AM CST 2026
+# restore v1.0.0 Wed Mar 25 02:40:32 AM CST 2026
