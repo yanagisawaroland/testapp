@@ -1,0 +1,43 @@
+variables:
+  HARBOR_REGISTRY: "harbor.devops.local:7581"
+  HARBOR_PROJECT: "devops"
+  APP_NAME: "testapp"
+
+stages:
+  - build
+  - deploy
+
+build:image:
+  stage: build
+  image:
+    name: harbor.devops.local:7581/devops/kaniko:v1.21.0-debug
+    entrypoint: [""]
+  tags:
+    - k8s
+  script:
+    - mkdir -p /kaniko/.docker
+    - |
+      echo "{\"auths\":{\"${HARBOR_REGISTRY}\":{\"username\":\"${HARBOR_USER}\",\"password\":\"${HARBOR_PASS}\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context ${CI_PROJECT_DIR} --dockerfile ${CI_PROJECT_DIR}/Dockerfile --destination ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${APP_NAME}:${CI_COMMIT_SHORT_SHA} --destination ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${APP_NAME}:latest --skip-tls-verify
+  only:
+    - main
+
+deploy:update-gitops:
+  stage: deploy
+  image: harbor.devops.local:7581/devops/gitlab-runner:alpine-v16.9.2
+  tags:
+    - k8s
+  script:
+    - apk add --no-cache git
+    - git config --global user.email "ci@devops.local"
+    - git config --global user.name "GitLab CI"
+    - git clone http://root:${GITLAB_TOKEN}@10.20.50.75:7591/devops/gitops.git
+    - cd gitops
+    - sed -i "s|${APP_NAME}:.*|${APP_NAME}:${CI_COMMIT_SHORT_SHA}|g" apps/testapp/base/rollout.yaml
+    - git add -A
+    - git diff --staged --quiet || git commit -m "ci update ${APP_NAME} to ${CI_COMMIT_SHORT_SHA}"
+    - git push origin HEAD:main
+  only:
+    - main
+  needs:
+    - build:image
